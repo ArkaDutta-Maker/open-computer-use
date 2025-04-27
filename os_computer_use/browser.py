@@ -2,12 +2,13 @@ import time
 import threading
 from multiprocessing import Process, Queue
 import webview
+from os_computer_use.logging import logger
 
 
 class Browser:
     def __init__(self):
-        self.width = 1024
-        self.height = 768
+        self.width = 1030
+        self.height = 780
         self.window_frame_height = 29  # Additional px for window border
         self.command_queue = Queue()
         self.webview_process = None
@@ -44,7 +45,7 @@ class Browser:
         if not self.is_running:
             print("No browser window is running")
             return
-
+        logger.log("Killing streaming process", "gray")
         self.command_queue.put("close")
         if self.webview_process:
             self.webview_process.join()
@@ -60,6 +61,7 @@ class Browser:
                 if not command_queue.empty():
                     command = command_queue.get()
                     if command == "close":
+                        logger.log("Closing browser window", "gray")
                         window.destroy()
                         break
                 time.sleep(1)  # Check every second

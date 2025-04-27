@@ -1,3 +1,4 @@
+import time
 from os_computer_use.streaming import Sandbox, DisplayClient
 from os_computer_use.browser import Browser
 from os_computer_use.sandbox_agent import SandboxAgent
@@ -24,26 +25,27 @@ async def start(user_input=None, output_dir=None):
     try:
         sandbox = Sandbox()
 
-        # The display server won't work on desktop-dev-v2 since ffmpeg is not installed
-        #client = DisplayClient(output_dir)
-        #print("Starting the display server...")
-        #stream_url = sandbox.start_stream()
-        #print("(The display client will start in five seconds.)")
-        # If the display client is opened before the stream is ready, it will close immediately
-        #await client.start(stream_url, user_input or "Sandbox", delay=5)
-
+       # The display server won't work on desktop-dev-v2 since ffmpeg is not installed
+    #     client = DisplayClient(output_dir)
+    #     print("Starting the display server...")
+    #     stream_url = sandbox.start_stream()
+    #     print("(The display client will start in five seconds.)")
+    #    # If the display client is opened before the stream is ready, it will close immediately
+    #     await client.start(stream_url, user_input or "Sandbox", delay=5)
         agent = SandboxAgent(sandbox, output_dir)
-
         print("Starting the VNC server...")
         sandbox.stream.start()
         vnc_url = sandbox.stream.get_url()
-
+        #print(sandbox.sandbox_id)
+        #sandbox.co
         print("Starting the VNC client...")
         browser = Browser()
-        browser.open(vnc_url)
-
+        if(not browser.is_running):
+            browser.open(vnc_url)
         while True:
             # Ask for user input, and exit if the user presses ctl-c
+            #print(sandbox.)
+            print(sandbox.stream)
             if user_input is None:
                 try:
                     user_input = input("USER: ")
@@ -52,13 +54,18 @@ async def start(user_input=None, output_dir=None):
             # Run the agent, and go back to the prompt if the user presses ctl-c
             else:
                 try:
-                    agent.run(user_input)
+                    agent.run(str(user_input))
                     user_input = None
                 except KeyboardInterrupt:
                     user_input = None
                 except Exception as e:
                     logger.print_colored(f"An error occurred: {e}", "red")
                     user_input = None
+            sandbox.set_timeout(600, 10)
+            logger.log(sandbox.sandbox_id, "gray")
+            logger.log(sandbox.get_host(8080), "gray")
+            logger.log(sandbox.get_info(), "gray")
+        print(agent.messages)
 
     finally:
         #if client:
@@ -101,7 +108,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--prompt", type=str, help="User prompt for the agent")
     args = parser.parse_args()
-
+    print(f"{args.prompt}")
     output_dir = initialize_output_directory(lambda id: f"./output/run_{id}")
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(start(user_input=args.prompt, output_dir=output_dir))
+    loop.run_until_complete(start(output_dir=output_dir, user_input=args.prompt))
+

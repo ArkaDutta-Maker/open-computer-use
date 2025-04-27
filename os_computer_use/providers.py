@@ -66,7 +66,7 @@ class GroqProvider(OpenAIBaseProvider):
     base_url = "https://api.groq.com/openai/v1"
     api_key = os.getenv("GROQ_API_KEY")
     aliases = {
-        "llama-3.2": "llama-3.2-90b-vision-preview",
+        "llama-3.2": "meta-llama/llama-4-maverick-17b-128e-instruct",
         "llama-3.3": "llama-3.3-70b-versatile",
     }
 

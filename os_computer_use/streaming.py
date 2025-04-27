@@ -4,16 +4,16 @@ import os
 import signal
 import sys
 
-
+from os_computer_use.logging import logger
 class Sandbox(SandboxBase):
 
     def start_stream(self):
         # Command to start streaming using ffmpeg
-        command = "ffmpeg -f x11grab -s 1024x768 -framerate 30 -i {self._display} -vcodec libx264 -preset ultrafast -tune zerolatency -f mpegts -listen 1 http://localhost:8080"
+        command = f"ffmpeg -f x11grab -s 1024x768 -framerate 30 -i {self._display} -vcodec libx264 -preset ultrafast -tune zerolatency -f mpegts -listen 1 http://localhost:8080"
         # Run the command in the background
         process = self.commands.run(
             command,
-            background=True,
+            background=False,
         )
         self.process = process
         return f"https://{self.get_host(8080)}"
@@ -21,6 +21,7 @@ class Sandbox(SandboxBase):
     def kill(self):
         # Kill the streaming process along with the sandbox
         if hasattr(self, "process"):
+            logger.log("Killing streaming process", "gray")
             self.process.kill()
         super().kill()
 
@@ -40,7 +41,7 @@ class DisplayClient:
             f"sleep {delay} && ffmpeg -reconnect 1 -i {stream_url} -c:v libx264 -preset fast -crf 23 "
             f"-c:a aac -b:a 128k -f mpegts -loglevel quiet - | tee {self.output_stream} | "
             f"ffplay -autoexit -i -loglevel quiet -window_title '{title}' -",
-            preexec_fn=os.setsid,
+            #preexec_fn=os.getpid,
             stdin=asyncio.subprocess.DEVNULL,
         )
 
@@ -55,7 +56,7 @@ class DisplayClient:
     async def save_stream(self):
         # Convert the saved stream to an mp4 file
         process = await asyncio.create_subprocess_shell(
-            f"ffmpeg -i {self.output_stream} -c:v copy -c:a copy -loglevel quiet {self.output_file}"
+            f"ffmpeg -y -i {self.output_stream} -c:v copy -c:a copy -loglevel quiet {self.output_file}"
         )
         await process.wait()
 

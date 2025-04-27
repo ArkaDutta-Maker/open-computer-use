@@ -1,3 +1,4 @@
+import time
 from os_computer_use.config import vision_model, action_model, grounding_model
 from os_computer_use.llm_provider import Message
 from os_computer_use.logging import logger
@@ -9,15 +10,15 @@ import tempfile
 from PIL import Image
 import json
 
-TYPING_DELAY_MS = 12
+TYPING_DELAY_MS = 60
 TYPING_GROUP_SIZE = 50
 
-tools = {
-    "stop": {
-        "description": "Indicate that the task has been completed.",
-        "params": {},
-    }
-}
+tools = dict()
+    # "stop": {
+    #     "description": "Indicate that the task has been completed.",
+    #     "params": {},
+    # }    
+
 
 
 class SandboxAgent:
@@ -29,7 +30,6 @@ class SandboxAgent:
         self.latest_screenshot = None  # Most recent PNG of the scren
         self.image_counter = 0  # Current screenshot number
         self.tmp_dir = tempfile.mkdtemp()  # Folder to store screenshots
-
         # Set the log file location
         if save_logs:
             logger.log_file = f"{output_dir}/log.html"
@@ -82,7 +82,7 @@ class SandboxAgent:
         params={"command": "Shell command to run synchronously"},
     )
     def run_command(self, command):
-        result = self.sandbox.commands.run(command, timeout=5)
+        result = self.sandbox.commands.run(command, timeout=60)
         stdout, stderr = result.stdout, result.stderr
         if stdout and stderr:
             return stdout + "\n" + stderr
@@ -155,13 +155,32 @@ class SandboxAgent:
                 *self.messages,
                 Message(
                     [
-                        self.screenshot(),
-                        "This image shows the current display of the computer. Please respond in the following format:\n"
-                        "The objective is: [put the objective here]\n"
-                        "On the screen, I see: [an extensive list of everything that might be relevant to the objective including windows, icons, menus, apps, and UI elements]\n"
-                        "This means the objective is: [complete|not complete]\n\n"
-                        "(Only continue if the objective is not complete.)\n"
-                        "The next step is to [click|type|run the shell command] [put the next single step here] in order to [put what you expect to happen here].",
+                         self.screenshot(),                        
+                         #"This image shows the current display of the computer. Please respond in the following format:\n"
+                        # "The objective is: [put the objective here]\n"
+                        # "On the screen, I see: [an extensive list of everything that might be relevant to the objective including windows, icons, menus, apps, and UI elements]\n"
+                        # "This means the objective is: [complete|not complete]\n\n"
+                        # "(Only continue if the objective is not complete.)\n"
+                        # "The next step is to [click|type|run the shell command] [put the next single step here] in order to [put what you expect to happen here].",
+
+                        """ 
+                        This image shows the current display of the computer.
+                        Analyze thoroughly and donot give any unwanted information.
+                        The computer is running a Linux operating system.
+                        You are a vision assistant whose job is to inspect a screenshot of my desktop and help me complete a goal.
+                            
+                            Format your answer **exactly** as follows:
+                            The objective is: [put the objective here]
+
+                            On the screen, I see:
+                            - [a detailed, bullet-point list of every relevant window, icon, menu, app and UI element that relates to the objective]
+
+                            This means the objective is: [complete | not complete]
+
+                            (Only continue if the objective is not complete.)
+
+                            The next step is to [click | type | run the shell command] [the one single action to take] in order to [what you expect will happen next]."""
+                            ,
                     ],
                     role="user",
                 ),
@@ -174,14 +193,23 @@ class SandboxAgent:
         logger.log(f"USER: {instruction}", print=False)
 
         should_continue = True
+        cnt = 0
         while should_continue:
-            # Stop the sandbox from timing out
-            self.sandbox.set_timeout(60)
-
+            self.sandbox.set_timeout(600, 600)
+            v = self.sandbox.list()
+            print(v)
             content, tool_calls = action_model.call(
                 [
                     Message(
-                        "You are an AI assistant with computer use abilities.",
+                        """
+                        You are a helpful desktop assistant.
+                        When assisting the user:
+                            1. Determine if the user needs to open a local application or visit a website.
+                            2. If it's a website, invoke the browser tool(**globe icon**) with an HTTPS URL. 
+                            3. Always decide whether a tool call is required.
+                            4. If you call a tool, output a JSON payload that exactly matches its signature.
+                            5. After the tool returns its result, resume your reasoning and reply in natural language.
+                            6. If no tool is needed, answer directly.""",
                         role="system",
                     ),
                     *self.messages,
@@ -189,7 +217,7 @@ class SandboxAgent:
                         logger.log(f"THOUGHT: {self.append_screenshot()}", "green")
                     ),
                     Message(
-                        "I will now use tool calls to take these actions, or use the stop command if the objective is complete.",
+                        "I will now use tool calls to take these actions.",
                     ),
                 ],
                 tools,
@@ -198,10 +226,18 @@ class SandboxAgent:
             if content:
                 self.messages.append(Message(logger.log(f"THOUGHT: {content}", "blue")))
 
-            should_continue = False
+            should_continue = True
+            logger.log(f"TOOL CALLS: {tool_calls}", "red")
+            if(tool_calls is None):
+                cnt += 1
+            
+            if cnt > 3:
+                should_continue = False
+            
             for tool_call in tool_calls:
                 name, parameters = tool_call.get("name"), tool_call.get("parameters")
                 should_continue = name != "stop"
+                logger.log(f"stop: {not should_continue}", color="red")
                 if not should_continue:
                     break
                 # Print the tool-call in an easily readable format
@@ -213,3 +249,4 @@ class SandboxAgent:
                 self.messages.append(
                     Message(logger.log(f"OBSERVATION: {result}", "yellow"))
                 )
+            #logger.log(self.messages[-1].get("content").lower(), color="blue")
